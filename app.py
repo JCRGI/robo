@@ -16,4 +16,5 @@ def home():
     return "<script>window.location.href='/login'</script>"
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # 🚫 NÃO use debug=True nem use_reloader=True aqui
+    app.run(debug=False, use_reloader=False)

@@ -4,6 +4,8 @@ import os
 import time
 import shutil
 import platform
+import stat
+
 
 EMULADORES_PATH = "emuladores.json"
 SDK_PATH = os.environ.get("ANDROID_HOME") or "C:\\Users\\Dev\\AppData\\Local\\Android\\Sdk"
@@ -78,20 +80,26 @@ def iniciar_emulador(nome_avd, porta, modo_janela=True):
 
 def parar_emulador(serial):
     subprocess.run(["adb", "-s", serial, "emu", "kill"])
-
+    # Aguarda até que o dispositivo realmente suma da lista
+    for _ in range(10):  # tenta por até 10 x 0.5 = 5 segundos
+        time.sleep(0.5)
+        ativos = listar_emuladores_ativos()
+        if serial not in ativos:
+            break
 
 def deletar_avd(nome_avd):
-    avd_dir = os.path.join(os.path.expanduser("~"), ".android", "avd")
-    avd_path = os.path.join(avd_dir, f"{nome_avd}.avd")
-    ini_path = os.path.join(avd_dir, f"{nome_avd}.ini")
+    avd_dir = os.path.expanduser(f"~/.android/avd/{nome_avd}.avd")
+    ini_file = os.path.expanduser(f"~/.android/avd/{nome_avd}.ini")
+
+    def handle_remove_readonly(func, path, _):
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
 
     try:
-        if os.path.exists(avd_path):
-            shutil.rmtree(avd_path)  # remove diretório completo, multiplataforma
-
-        if os.path.exists(ini_path):
-            os.remove(ini_path)  # remove arquivo .ini
-
+        if os.path.exists(avd_dir):
+            shutil.rmtree(avd_dir, onerror=handle_remove_readonly)
+        if os.path.exists(ini_file):
+            os.remove(ini_file)
     except Exception as e:
         raise Exception(f"Erro ao deletar AVD '{nome_avd}': {e}")
 

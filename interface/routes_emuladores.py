@@ -1,4 +1,7 @@
+import os
+import shutil
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from core.duplicador_avd import duplicar_avd_em_background, obter_status
 from core.emulador_manager import (
     listar_avds,
     listar_emuladores_ativos,
@@ -24,19 +27,39 @@ def duplicar_avd_route():
     nome_novo = request.form.get("avd_novo")
 
     if not nome_base or not nome_novo:
-        flash("Informe os dois nomes para duplicação.", "warning")
-        return redirect(url_for("emuladores.gerenciar_emuladores"))
+        return jsonify({"erro": "Informe o AVD base e o novo nome."}), 400
+
+    # Sanitização
+    nome_novo = nome_novo.strip().replace(" ", "_")
+    nome_novo = re.sub(r'[^a-zA-Z0-9._-]', '', nome_novo)
+
+    home_dir = os.path.expanduser("~")
+    avd_dir = os.path.join(home_dir, ".android", "avd")
+    base_avd_path = os.path.join(avd_dir, f"{nome_base}.avd")
+    base_ini_path = os.path.join(avd_dir, f"{nome_base}.ini")
+    novo_avd_path = os.path.join(avd_dir, f"{nome_novo}.avd")
+    novo_ini_path = os.path.join(avd_dir, f"{nome_novo}.ini")
+
+    if not os.path.exists(base_avd_path) or not os.path.exists(base_ini_path):
+        return jsonify({"erro": f"O AVD base '{nome_base}' não foi encontrado."}), 400
+
+    if os.path.exists(novo_avd_path) or os.path.exists(novo_ini_path):
+        return jsonify({"erro": f"O AVD '{nome_novo}' já existe."}), 400
 
     try:
-        duplicar_avd(nome_base, nome_novo)
-        flash(f"AVD '{nome_novo}' criado com base em '{nome_base}'.", "success")
+        task_id = duplicar_avd_em_background(nome_base, nome_novo)
+        return jsonify({"task_id": task_id})
     except Exception as e:
-        flash(str(e), "danger")
+        return jsonify({"erro": f"Erro ao iniciar duplicação: {str(e)}"}), 500
 
-    return redirect(url_for("emuladores.gerenciar_emuladores"))
+@bp_emuladores.route("/status/<task_id>")
+def status_duplicacao(task_id):
+    return jsonify(obter_status(task_id))
+
 
 @bp_emuladores.route("/emuladores", methods=["GET", "POST"])
 def gerenciar_emuladores():
+
     if not session.get("logado"):
         return redirect(url_for("auth.login"))
 
@@ -69,7 +92,7 @@ def gerenciar_emuladores():
     for i, avd in enumerate(avds_disponiveis):
         porta = 5560 + i
         serial = f"emulator-{porta}"
-        status = "Rodando" if any(e['serial'] == serial for e in emuladores_ativos) else "Desligado"
+        status = "Rodando" if serial in emuladores_ativos else "Desligado"
         avds.append({
             "nome": avd,
             "porta": porta,
@@ -78,16 +101,29 @@ def gerenciar_emuladores():
 
     return render_template("emuladores.html", avds=avds)
 
+
 @bp_emuladores.route("/parar/<int:porta>", methods=["POST"])
 def parar_avd_route(porta):
-    parar_emulador(porta)
+    serial = f"emulator-{porta}"  # converte a porta para o serial esperado
+    parar_emulador(serial)
     flash(f"Emulador na porta {porta} foi desligado.", "success")
     return redirect(url_for("emuladores.gerenciar_emuladores"))
 
 @bp_emuladores.route("/deletar_avd/<nome>", methods=["POST"])
 def deletar_avd_route(nome):
-    deletar_avd(nome)
-    flash(f"AVD '{nome}' deletado.", "info")
+    try:
+        # Para antes de deletar
+        serial = f"emulator-{5560 + listar_avds().index(nome)}"
+        parar_emulador(serial)
+    except:
+        pass  # ignora erro se já estiver parado
+
+    try:
+        deletar_avd(nome)
+        flash(f"AVD '{nome}' deletado.", "info")
+    except Exception as e:
+        flash(str(e), "danger")
+
     return redirect(url_for("emuladores.gerenciar_emuladores"))
 
 @bp_emuladores.route("/trocar_robo", methods=["POST"])
@@ -132,11 +168,17 @@ def gerenciar_emuladores():
     for i, avd in enumerate(avds_disponiveis):
         porta = 5560 + i
         serial = f"emulator-{porta}"
-        status = "Rodando" if any(e['serial'] == serial for e in emuladores_ativos) else "Desligado"
+        status = "Rodando" if serial in emuladores_ativos else "Desligado"
         avds.append({
             "nome": avd,
             "porta": porta,
             "status": status
         })
 
+
+
+        
+
     return render_template("emuladores.html", avds=avds)
+
+   
