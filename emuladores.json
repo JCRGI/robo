@@ -1,0 +1,16 @@
+[
+    {
+        "avd": "disney",
+        "porta": 1,
+        "serial": "emulator-1",
+        "status": "desligado",
+        "robo": "robo1"
+    },
+    {
+        "avd": "disney2",
+        "porta": 2,
+        "serial": "emulator-2",
+        "status": "rodando",
+        "robo": "robo1"
+    }
+]

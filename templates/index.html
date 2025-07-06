@@ -1,0 +1,73 @@
+<!-- <!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8" />
+    <title>Interface Web do Robô Android</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <h1 class="mb-4">Bem-vindo à Interface do Robô Android</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                <pre>{{ message }}</pre>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="mb-4">
+            <a href="{{ url_for('emuladores.gerenciar_emuladores') }}" class="btn btn-outline-dark btn-lg">
+                Gerenciar Emuladores Android
+            </a>
+        </div>
+
+        <h4>Dispositivos cadastrados</h4>
+        {% if dispositivos %}
+            <ul class="list-group mb-4">
+                {% for d in dispositivos %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ d.nome }} — {{ d.ip }}
+                        <form action="{{ url_for('conectar_dispositivo', ip=d.ip) }}" method="post">
+                            <button class="btn btn-sm btn-outline-primary" {% if conectado and selecionado == d.ip %}disabled{% endif %}>
+                                Conectar
+                            </button>
+                        </form>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>Nenhum dispositivo cadastrado.</p>
+        {% endif %}
+
+        <h4>Adicionar novo dispositivo</h4>
+        <form action="{{ url_for('adicionar_dispositivo') }}" method="post" class="mb-4">
+            <div class="mb-2">
+                <input type="text" name="nome" class="form-control" placeholder="Nome do dispositivo" required />
+            </div>
+            <div class="mb-2">
+                <input type="text" name="ip" class="form-control" placeholder="IP do dispositivo (ex: 192.168.0.100:5555)" required />
+            </div>
+            <button class="btn btn-success">Adicionar</button>
+        </form>
+
+        <form action="{{ url_for('executar') }}" method="post" class="mb-3">
+            <label for="comando" class="form-label">Comando Shell:</label>
+            <input type="text" id="comando" name="comando" class="form-control" placeholder="Digite um comando shell" required {{ 'disabled' if not conectado }}>
+            <button type="submit" class="btn btn-primary mt-2" {{ 'disabled' if not conectado }}>Executar</button>
+        </form>
+
+        <form action="{{ url_for('screenshot') }}" method="post">
+            <label for="nome_arquivo" class="form-label">Nome da Screenshot:</label>
+            <input type="text" id="nome_arquivo" name="nome_arquivo" class="form-control" placeholder="exemplo: tela.png" {{ 'disabled' if not conectado }}>
+            <button type="submit" class="btn btn-info mt-2" {{ 'disabled' if not conectado }}>Tirar Screenshot</button>
+        </form>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> -->
