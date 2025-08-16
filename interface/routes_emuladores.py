@@ -1,6 +1,6 @@
 import os
 import shutil
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app
 from core.duplicador_avd import duplicar_avd_em_background, obter_status
 from core.emulador_manager import (
     listar_avds,
@@ -9,10 +9,17 @@ from core.emulador_manager import (
     parar_emulador,
     deletar_avd
 )
+
+from core.robo_sequencial import start_single_click_once
+
+from core.image_processor import process_image
+from core.adb_manager import AdbManager
 import re
 
 from flask import jsonify
 from core.emulador_manager import duplicar_avd
+from core.adb_manager import AdbManager
+from core.detector_template import encontrar_botao_por_template
 
 bp_emuladores = Blueprint("emuladores", __name__)
 
@@ -20,6 +27,24 @@ bp_emuladores = Blueprint("emuladores", __name__)
 def limpar_nome_avd(nome):
     nome_limpo = nome.strip().replace(" ", "_")
     return re.sub(r'[^a-zA-Z0-9._-]', '', nome_limpo)
+
+
+@bp_emuladores.route("/ocr/<int:porta>", methods=["POST"])
+def ocr_emulador(porta):
+    serial = f"emulator-{porta}"
+    adb = AdbManager()
+    try:
+        adb.connect_device()
+        # Conecta ao dispositivo correto pela porta
+        adb.device = next(d for d in adb.client.devices() if d.serial == serial)
+        filename = f"screenshot_{porta}.png"
+        adb.capture_screen(filename)
+        texto = process_image(filename)
+        flash(f"OCR do AVD '{serial}':\n{texto}", "info")
+    except Exception as e:
+        flash(f"Erro ao fazer OCR no AVD '{serial}': {e}", "danger")
+
+    return redirect(url_for("emuladores.gerenciar_emuladores"))
 
 @bp_emuladores.route("/duplicar_avd", methods=["POST"])
 def duplicar_avd_route():
@@ -174,11 +199,113 @@ def gerenciar_emuladores():
             "porta": porta,
             "status": status
         })
-
-
-
-        
-
     return render_template("emuladores.html", avds=avds)
 
-   
+@bp_emuladores.route("/clicar_por_texto/<int:porta>", methods=["POST"])
+def clicar_por_texto(porta):
+    texto = request.form.get("texto")
+    if not texto:
+        flash("Texto alvo não informado.", "warning")
+        return redirect(url_for("emuladores.gerenciar_emuladores"))
+
+    serial = f"emulator-{porta}"
+    adb = AdbManager()
+    try:
+        adb.connect_device()
+        adb.device = next(d for d in adb.client.devices() if d.serial == serial)
+
+        filename = f"screenshot_{porta}.png"
+        adb.capture_screen(filename)
+
+        from core.image_processor import encontrar_texto_com_posicao
+        info = encontrar_texto_com_posicao(filename, texto)
+
+        if not info:
+            flash(f"Texto '{texto}' não encontrado na tela.", "danger")
+        else:
+            x, y = info["x"], info["y"]
+            adb.run_shell(f"input tap {x} {y}")
+            print(f"Clique em '{texto}' realizado na posição ({x}, {y})", "success")
+
+    except Exception as e:
+        flash(f"Erro ao clicar: {e}", "danger")
+
+    return redirect(url_for("emuladores.gerenciar_emuladores"))
+
+@bp_emuladores.route("/buscar_purchase/<int:porta>", methods=["POST"])
+def buscar_botao_purchase(porta):
+    serial = f"emulator-{porta}"
+    adb = AdbManager()
+
+    try:
+        adb.connect_device()
+        adb.device = next(d for d in adb.client.devices() if d.serial == serial)
+        from core.image_processor import encontrar_texto_com_posicao
+
+        tentativas = 10
+        encontrou = False
+
+        for i in range(tentativas):
+            print(f"[{serial}] Tentativa {i + 1}/{tentativas}")
+            filename = f"screenshot_{serial}.png"
+            adb.capture_screen(filename)
+
+            info = encontrar_texto_com_posicao(filename, "Purchase")
+            if info:
+                x, y = info["x"], info["y"]
+                adb.run_shell(f"input tap {x} {y}")
+                flash(f"Botão 'Purchase' encontrado e clicado em ({x}, {y})!", "success")
+                encontrou = True
+                break
+            else:
+                # Ação de navegação: scroll para baixo
+                adb.run_shell("input swipe 300 1000 300 500")
+                time.sleep(1.5)
+
+        if not encontrou:
+            flash("Não foi possível encontrar o botão 'Purchase' após percorrer o app.", "danger")
+
+    except Exception as e:
+        flash(f"Erro durante busca automática: {e}", "danger")
+
+    return redirect(url_for("emuladores.gerenciar_emuladores"))
+
+
+@bp_emuladores.route("/clicar_template/<int:porta>", methods=["POST"])
+def clicar_template(porta):
+    serial = f"emulator-{porta}"
+    adb = AdbManager()
+    try:
+        adb.connect_device()
+        adb.device = next(d for d in adb.client.devices() if d.serial == serial)
+
+        # 1) Captura a tela
+        screenshot = f"screenshot_{porta}.png"
+        adb.capture_screen(screenshot)
+
+        # 2) Caminho do template (ajuste conforme sua pasta):
+        # Ex.: coloque seu recorte em "<raiz do projeto>/assets/templates/btn_alvo.png"
+        raiz = current_app.root_path  # diretório do app Flask
+        path_template = os.path.join(raiz, "assets", "templates", "btn_alvo.png")
+
+        # 3) Detecta por template
+        match = encontrar_botao_por_template(
+            path_screenshot=screenshot,
+            path_template=path_template,
+            conf=0.82,  # ajuste fino depois
+        )
+
+        if not match:
+            flash("Botão não encontrado com confiança suficiente.", "warning")
+        else:
+            adb.tap(match["cx"], match["cy"])
+            flash(
+                f"Clique em ({int(match['cx'])}, {int(match['cy'])}) "
+                f"[score={match['score']:.2f}].",
+                "success",
+            )
+    except Exception as e:
+        flash(f"Erro ao clicar no botão: {e}", "danger")
+
+    return redirect(url_for("emuladores.gerenciar_emuladores"))
+

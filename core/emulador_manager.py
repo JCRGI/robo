@@ -65,6 +65,9 @@ def criar_novo_avd(nome_avd):
     ], shell=True, env=env)
 
 def iniciar_emulador(nome_avd, porta, modo_janela=True):
+    import subprocess
+    import time
+
     if nome_avd not in listar_avds():
         criar_novo_avd(nome_avd)
 
@@ -76,7 +79,65 @@ def iniciar_emulador(nome_avd, porta, modo_janela=True):
         cmd += ["-no-audio", "-no-window"]
 
     subprocess.Popen(cmd)
-    time.sleep(5)
+    time.sleep(3)  # pequena espera antes de checar o status
+
+    serial = f"emulator-{porta}"
+
+    # Aguarda o emulador aparecer com status 'device'
+    for _ in range(30):
+        try:
+            output = subprocess.check_output(["adb", "devices"], encoding="utf-8")
+            linhas = [l.strip() for l in output.strip().splitlines() if l.strip()]
+            for linha in linhas[1:]:
+                if serial in linha and "device" in linha:
+                    print(f"[OK] {serial} conectado ao ADB.")
+                    raise StopIteration
+        except StopIteration:
+            break
+        time.sleep(1)
+    else:
+        print(f"[ERRO] Timeout: {serial} não ficou online.")
+        return
+
+    # Aguarda o Android terminar o boot completo
+    for _ in range(30):  # até 30 segundos
+        try:
+            boot_status = subprocess.check_output(["adb", "-s", serial, "shell", "getprop", "sys.boot_completed"], encoding="utf-8").strip()
+            if boot_status == "1":
+                print(f"[OK] {serial} terminou o boot.")
+                break
+        except:
+            pass
+        time.sleep(1)
+    else:
+        print(f"[ERRO] Timeout: {serial} não completou o boot.")
+        return
+
+    # 🟢 Agora o sistema está pronto para abrir o app
+    pacote = "com.disney.wdw.android"
+    try:
+        subprocess.run([
+            "adb", "-s", serial,
+            "shell", "monkey",
+            "-p", pacote,
+            "-c", "android.intent.category.LAUNCHER",
+            "1"
+        ])
+        print(f"[OK] App {pacote} aberto automaticamente em {serial}")
+    except Exception as e:
+        print(f"[ERRO] Ao abrir app {pacote}: {e}")
+        return
+
+    # 🤖 Robô automático: busca botão "Purchase"
+    try:
+        esperar_home_e_clicar_purchase(serial)
+    except Exception as e:
+        print(f"[ERRO] Falha na automação com OCR inteligente: {e}")
+        
+        
+        
+        
+        
 
 def parar_emulador(serial):
     subprocess.run(["adb", "-s", serial, "emu", "kill"])
@@ -156,5 +217,89 @@ def duplicar_avd(nome_base: str, nome_novo: str):
         f.write(novo_conteudo)
 
     print(f"[OK] AVD '{nome_novo}' duplicado com base em '{nome_base}'.")
+    
+    
 
 
+def buscar_e_clicar_purchase(serial, tentativas=12):
+    from core.adb_manager import AdbManager
+    from core.image_processor import encontrar_texto_com_posicao
+    import time
+
+    termos = ["purchase", "Purchase"]
+    adb = AdbManager()
+    adb.connect_device()
+    adb.device = next(d for d in adb.client.devices() if d.serial == serial)
+
+    for i in range(tentativas):
+        print(f"\n[{serial}] Tentativa {i + 1}/{tentativas}")
+
+        filename = f"screenshot_{serial}.png"
+        adb.capture_screen(filename)
+
+        info = encontrar_texto_com_posicao(filename, "purchase")
+
+        if info:
+            x = info["x"]
+            y = info["y"]
+            termo = info["texto_encontrado"]
+
+            adb.run_shell(f"input tap {x} {y}")
+            print(f"[AUTO] Clicou automaticamente em '{termo.upper()}' na posição ({x}, {y}) ✅")
+            return True
+
+        print("[INFO] Termo não encontrado, realizando scroll...")
+        adb.run_shell("input swipe 200 800 200 300")
+        time.sleep(2)
+
+    print(f"[ERRO] Nenhum botão correspondente a {termos} foi encontrado após {tentativas} tentativas.")
+    return False
+
+
+def esperar_home_e_clicar_purchase(serial, timeout=60):
+    from core.adb_manager import AdbManager
+    from core.image_processor import encontrar_texto_com_posicao
+    import time
+
+    adb = AdbManager()
+    adb.connect_device()
+    adb.device = next(d for d in adb.client.devices() if d.serial == serial)
+
+    print(f"[{serial}] Aguardando a tela de home carregar...")
+
+    inicio = time.time()
+    while time.time() - inicio < timeout:
+        filename = f"screenshot_{serial}.png"
+        adb.capture_screen(filename)
+
+        info = encontrar_texto_com_posicao(filename, ["hello", "lightning", "multi pass"])
+        if info:
+            print(f"[{serial}] Interface detectada! ✅")
+            break
+
+        print(f"[{serial}] Ainda carregando... nova tentativa em 1.5s")
+        time.sleep(1.5)
+    else:
+        print(f"[{serial}] ⚠️ Timeout: a tela não carregou em {timeout}s.")
+        return False
+
+    # Agora executa swipe e clique no botão
+    
+    print(f"[{serial}] Executando swipe curto...")
+    adb.run_shell("input swipe 300 1000 300 200 300")
+    time.sleep(1.5)
+
+    print(f"[{serial}] Procurando botão 'Purchase' após o swipe...")
+
+    from core.image_processor import encontrar_texto_com_posicao
+    texto = "purchase"
+    info = encontrar_texto_com_posicao(filename, texto)
+
+    if not info:
+        print(f"Texto '{texto}' não encontrado na tela.", "danger")
+        return False
+    else:
+        x, y = info["x"], info["y"]
+        adb.run_shell(f"input tap {x} {y}")
+        print(f"Clique em '{texto}' realizado na posição ({x}, {y})", "success")
+        return True

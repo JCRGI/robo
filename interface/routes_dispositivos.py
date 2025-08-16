@@ -3,6 +3,8 @@ import os
 import json
 from core.storage import carregar_dispositivos, salvar_dispositivos
 from core.adb_manager import AdbManager
+from core.image_processor import process_image
+
 
 bp_dispositivos = Blueprint('dispositivos', __name__)
 adb = AdbManager()
@@ -75,4 +77,21 @@ def screenshot():
         flash(f"Screenshot salva como {nome_arquivo}", "success")
     except Exception as e:
         flash(f"Erro ao tirar screenshot: {e}", "danger")
+    return redirect(url_for('dispositivos.index'))
+
+
+@bp_dispositivos.route('/ocr', methods=['POST'])
+def ocr_dispositivo():
+    if not conectado:
+        flash("Conecte um dispositivo primeiro!", "warning")
+        return redirect(url_for('dispositivos.index'))
+
+    nome_arquivo = "screenshot.png"
+    try:
+        adb.capture_screen(nome_arquivo)
+        texto = process_image(nome_arquivo)
+        flash(f"OCR concluído:\n{texto}", "info")
+    except Exception as e:
+        flash(f"Erro ao processar OCR: {e}", "danger")
+
     return redirect(url_for('dispositivos.index'))

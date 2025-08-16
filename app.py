@@ -17,4 +17,4 @@ def home():
 
 if __name__ == '__main__':
     # 🚫 NÃO use debug=True nem use_reloader=True aqui
-    app.run(debug=False, use_reloader=False)
+    app.run(debug=True, use_reloader=True)

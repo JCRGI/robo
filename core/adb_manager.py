@@ -24,3 +24,8 @@ class AdbManager:
         with open(filename, "wb") as f:
             f.write(image)
         print(f"Screenshot salva em {filename}")
+        
+    def tap(self, x: int | float, y: int | float):
+        if not self.device:
+            raise Exception("Nenhum dispositivo conectado.")
+        self.device.shell(f"input tap {int(x)} {int(y)}")

@@ -207,6 +207,18 @@
             <form action="{{ url_for('emuladores.parar_avd_route', porta=avd.porta) }}" method="post" class="d-inline">
               <button class="btn btn-sm btn-danger">Desligar</button>
             </form>
+            <form action="{{ url_for('emuladores.ocr_emulador', porta=avd.porta) }}" method="post" class="d-inline ms-2">
+              <button class="btn btn-sm btn-outline-primary" {% if avd.status != 'Rodando' %} disabled {% endif %}>
+                OCR
+              </button>
+            </form>
+
+              <form action="{{ url_for('emuladores.clicar_por_texto', porta=avd.porta) }}" method="post" class="d-inline ms-2">
+    <input type="hidden" name="texto" value="purchase">
+    <button class="btn btn-sm btn-warning">
+      Clicar 'purchase'
+    </button>
+  </form>
             {% else %}
             <form action="{{ url_for('emuladores.gerenciar_emuladores') }}" method="post" class="d-inline">
               <input type="hidden" name="acao" value="usar_existente" />
