@@ -1,6 +1,11 @@
-import os, shutil, threading, time, uuid
+import os
+import shutil
+import threading
+import time
+import uuid
 
 progresso_tarefas = {}
+
 
 def duplicar_avd_em_background(avd_origem, avd_destino):
     task_id = str(uuid.uuid4())
@@ -37,6 +42,7 @@ def duplicar_avd_em_background(avd_origem, avd_destino):
 
     threading.Thread(target=tarefa).start()
     return task_id
+
 
 def obter_status(task_id):
     return progresso_tarefas.get(task_id, {"status": "desconhecido", "percent": 0})

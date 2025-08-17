@@ -45,7 +45,7 @@
         {% endif %}
 
         <h4>Adicionar novo dispositivo</h4>
-        <form action="{{ url_for('adicionar_dispositivo') }}" method="post" class="mb-4">
+        <form action="{{ url_for('dispositivos.adicionar_dispositivo') }}" method="post" class="mb-4">
             <div class="mb-2">
                 <input type="text" name="nome" class="form-control" placeholder="Nome do dispositivo" required />
             </div>

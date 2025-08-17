@@ -1,16 +1,8 @@
 import os
 
-from flask import render_template
-
 from app import create_app
 
 app = create_app(os.getenv("FLASK_CONFIG", "configs.config.DevConfig"))
-
-
-@app.route("/")
-def home():
-    return render_template("index.html")
-
 
 if __name__ == "__main__":
     host = os.getenv("FLASK_RUN_HOST", "127.0.0.1")

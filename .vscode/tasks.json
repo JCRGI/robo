@@ -1,0 +1,18 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Dead code scan (vulture)",
+      "type": "process",
+      "command": "py",
+      "args": [
+        "-m","vulture",".",
+        "--min-confidence","0",
+        "--ignore-decorators","app.route,bp_emuladores.route,bp_auth.route,bp_dispositivos.route",
+        "--ignore-names","secret_key,tesseract_cmd,home,login,logout,adicionar_dispositivo,conectar_dispositivo,executar,ocr_dispositivo,ocr_emulador,duplicar_avd_route,status_duplicacao,gerenciar_emuladores,parar_avd_route,deletar_avd_route,trocar_robo,clicar_por_texto,buscar_botao_purchase,clicar_template",
+        "--exclude","**/__pycache__/**,**/.venv/**,**/env/**,**/venv/**,**/assets/**,**/templates/**,**/node_modules/**"
+      ],
+      "options": { "cwd": "${workspaceFolder}" }
+    }
+  ]
+}

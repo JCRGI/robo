@@ -1,7 +1,8 @@
+from typing import Dict, Optional
 
 import cv2
 import numpy as np
-from typing import Optional, Dict
+
 
 def encontrar_botao_por_template(
     path_screenshot: str,
@@ -23,7 +24,7 @@ def encontrar_botao_por_template(
         dict | None -> {"x1","y1","x2","y2","cx","cy","score"}
     """
     img = cv2.imread(path_screenshot, cv2.IMREAD_COLOR)
-    tpl = cv2.imread(path_template,  cv2.IMREAD_COLOR)
+    tpl = cv2.imread(path_template, cv2.IMREAD_COLOR)
     if img is None:
         raise FileNotFoundError(f"Screenshot não encontrada: {path_screenshot}")
     if tpl is None:
@@ -50,8 +51,8 @@ def encontrar_botao_por_template(
         if th >= img_gray.shape[0] or tw >= img_gray.shape[1]:
             continue
 
-        res = cv2.matchTemplate(img_gray, tpl_rs, cv2.TM_CCOEFF_NORMED)
-        minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(res)
+        resultado = cv2.matchTemplate(img_gray, tpl_rs, cv2.TM_CCOEFF_NORMED)
+        _, maxVal, _, maxLoc = cv2.minMaxLoc(resultado)
 
         if best is None or maxVal > best[0]:
             best = (maxVal, maxLoc, tw, th)

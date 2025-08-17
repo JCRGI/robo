@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Interpretação de Imagem</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="container py-4">
+    <h1 class="h4 mb-3">Interpretação de Imagem</h1>
+
+    {% with msgs = get_flashed_messages(with_categories=true) %} {% if msgs %}
+    <div class="mb-3">
+      {% for c,m in msgs %}
+      <div class="alert alert-{{ c }} alert-dismissible fade show" role="alert">
+        {{ m }}
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="alert"
+          aria-label="Fechar"
+        ></button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %} {% endwith %}
+
+    <form
+      action="{{ url_for('vision.interpretar') }}"
+      method="post"
+      enctype="multipart/form-data"
+      class="row g-3 mb-4"
+    >
+      <div class="col-md-6">
+        <label class="form-label">Selecione uma imagem</label>
+        <input
+          type="file"
+          name="imagem"
+          accept="image/*"
+          class="form-control"
+          required
+        />
+      </div>
+      <div class="col-md-3 d-flex align-items-end">
+        <button class="btn btn-primary">Interpretar</button>
+      </div>
+    </form>
+
+    {% if results %}
+    <div class="row g-4">
+      <div class="col-lg-6">
+        <h2 class="h6">Imagem Anotada</h2>
+        <img
+          src="{{ annotated_url }}"
+          alt="Anotada"
+          class="img-fluid border rounded"
+        />
+      </div>
+      <div class="col-lg-6">
+        <h2 class="h6">Resumo</h2>
+        <ul class="list-group mb-3">
+          <li class="list-group-item">
+            Dimensões: {{ results.width }} x {{ results.height }}
+          </li>
+          <li class="list-group-item">
+            Cores dominantes: {% for c in results.dominant_colors %}
+            <span class="badge" style="background: {{ c.hex }}">&nbsp;</span>
+            <small class="text-muted">{{ c.hex }} ({{ c.percent }}%)</small>
+            {% endfor %}
+          </li>
+          <li class="list-group-item">
+            Caixas detectadas: {{ results.boxes|length }}
+          </li>
+          <li class="list-group-item">Itens OCR: {{ results.ocr|length }}</li>
+        </ul>
+
+        <h2 class="h6">Textos (OCR)</h2>
+        <div class="table-responsive" style="max-height: 240px">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Texto</th>
+                <th>Conf</th>
+                <th>Box</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for o in results.ocr %}
+              <tr>
+                <td>{{ o.text }}</td>
+                <td>{{ '%.0f' % o.conf }}</td>
+                <td>{{ o.x }},{{ o.y }},{{ o.w }}x{{ o.h }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

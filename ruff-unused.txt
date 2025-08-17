@@ -1,0 +1,54 @@
+F401 [*] `platform` imported but unused
+ --> core\emulador_manager.py:6:8
+  |
+4 | import time
+5 | import shutil
+6 | import platform
+  |        ^^^^^^^^
+7 | import stat
+  |
+help: Remove unused import: `platform`
+
+F401 [*] `stat` imported but unused
+ --> core\emulador_manager.py:7:8
+  |
+5 | import shutil
+6 | import platform
+7 | import stat
+  |        ^^^^
+  |
+help: Remove unused import: `stat`
+
+F401 [*] `os` imported but unused
+ --> core\robo_sequencial.py:2:8
+  |
+2 | import os
+  |        ^^
+3 | import time
+4 | import threading
+  |
+help: Remove unused import: `os`
+
+F401 [*] `json` imported but unused
+ --> interface\routes_dispositivos.py:3:8
+  |
+1 | from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+2 | import os
+3 | import json
+  |        ^^^^
+4 | from core.storage import carregar_dispositivos, salvar_dispositivos
+5 | from core.adb_manager import AdbManager
+  |
+help: Remove unused import: `json`
+
+F401 [*] `re` imported but unused
+ --> util\touch_logger.py:2:8
+  |
+1 | import subprocess
+2 | import re
+  |        ^^
+3 |
+4 | def logar_toques(serial):
+  |
+help: Remove unused import: `re`
+

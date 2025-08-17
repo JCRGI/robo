@@ -1,5 +1,6 @@
 from ppadb.client import Client as AdbClient
 
+
 class AdbManager:
     def __init__(self, host="127.0.0.1", port=5037):
         self.client = AdbClient(host=host, port=port)
@@ -24,7 +25,7 @@ class AdbManager:
         with open(filename, "wb") as f:
             f.write(image)
         print(f"Screenshot salva em {filename}")
-        
+
     def tap(self, x: int | float, y: int | float):
         if not self.device:
             raise Exception("Nenhum dispositivo conectado.")
