@@ -19,11 +19,13 @@ def create_app(config_object: str | None = None) -> Flask:
     from app.blueprints.routes_dispositivos import bp_dispositivos
     from app.blueprints.routes_emuladores import bp_emuladores
     from app.blueprints.routes_vision import bp_vision
+    from app.blueprints.routes_bots import bp_bots
 
     app.register_blueprint(bp_auth)
     app.register_blueprint(bp_dispositivos)
     app.register_blueprint(bp_emuladores)
     app.register_blueprint(bp_vision)
+    app.register_blueprint(bp_bots)
 
     logging.basicConfig(
         level=os.getenv("LOG_LEVEL", "INFO"),
@@ -33,5 +35,7 @@ def create_app(config_object: str | None = None) -> Flask:
     @app.route("/")
     def home():
         return redirect(url_for("emuladores.gerenciar_emuladores"))
+
+  
 
     return app

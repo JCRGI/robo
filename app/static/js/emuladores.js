@@ -1,6 +1,6 @@
 // filepath: c:\Users\Dev\robo\robo\app\static\js\emuladores.js
+// ====== DUPLICAÇÃO (opcional) ======
 (() => {
-  // Se você tiver um formulário de duplicação, mantenha este bloco; senão, ele apenas não roda.
   const form = document.getElementById("formDuplicar");
   if (!form) return;
 
@@ -8,151 +8,173 @@
   const spinner = document.getElementById("spinnerDuplicar");
   const label = document.getElementById("labelBtnDuplicar");
   const alerta = document.getElementById("alertaDuplicacao");
-
   const modalEl = document.getElementById("modalDuplicacao");
-  const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
   const statusEl = document.getElementById("statusDuplicacao");
   const resultadoEl = document.getElementById("resultadoDuplicacao");
+  const modal = new bootstrap.Modal(modalEl);
 
-  function setLoading(isLoading) {
-    if (!spinner || !btn || !label) return;
-    spinner.classList.toggle("d-none", !isLoading);
-    btn.disabled = isLoading;
-    label.textContent = isLoading ? "Aguarde..." : "Duplicar";
+  function setLoading(on) {
+    spinner.classList.toggle("d-none", !on);
+    btn.disabled = on;
+    label.textContent = on ? "Aguarde..." : "Duplicar";
   }
-
-  function alertHtml(kind, msg) {
-    return `<div class="alert alert-${kind} alert-dismissible fade show" role="alert">
-      ${msg}
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
-    </div>`;
-  }
-
-  async function postDuplicar(data) {
-    const res = await fetch("/duplicar_avd", { method: "POST", body: data });
-    return res.json();
-  }
-
-  async function pollStatus(taskId) {
-    const res = await fetch(`/status/${taskId}`);
-    return res.json();
-  }
+  const alertHtml = (kind, msg) => `<div class="alert alert-${kind} p-2 mb-0">${msg}</div>`;
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (!modal) return;
-    if (alerta) alerta.innerHTML = "";
-    if (resultadoEl) resultadoEl.classList.add("d-none");
-    if (statusEl) statusEl.textContent = "Iniciando clonagem...";
-
-    setLoading(true);
+    alerta.innerHTML = "";
+    resultadoEl.classList.add("d-none");
+    statusEl.textContent = "Iniciando...";
     modal.show();
-
+    setLoading(true);
     try {
-      const json = await postDuplicar(new FormData(form));
-      if (json.erro) {
-        if (alerta) alerta.innerHTML = alertHtml("danger", json.erro);
-        setLoading(false);
-        return;
-      }
-      const { task_id } = json;
-
-      const interval = setInterval(async () => {
+      const fd = new FormData(form);
+      const res = await fetch("/duplicar_avd", { method: "POST", body: fd });
+      const j = await res.json();
+      if (!res.ok || j.erro) throw new Error(j.erro || "Falha");
+      const { task_id } = j;
+      const intv = setInterval(async () => {
         try {
-          const { status, erro } = await pollStatus(task_id);
-          if (erro || status === "concluido") {
-            clearInterval(interval);
-            setLoading(false);
-            if (resultadoEl) resultadoEl.classList.remove("d-none");
-            if (erro) {
-              if (resultadoEl) resultadoEl.innerHTML = alertHtml("danger", erro);
-            } else {
-              if (resultadoEl) resultadoEl.innerHTML = alertHtml("success", "AVD duplicado com sucesso!");
-              setTimeout(() => window.location.reload(), 1200);
-            }
-          } else if (statusEl) {
-            statusEl.textContent = `Progresso: ${status || "em andamento"}...`;
-          }
-        } catch {
-          clearInterval(interval);
-          setLoading(false);
-          if (resultadoEl) {
+          const r = await fetch(`/status/${task_id}`).then(r => r.json());
+            if (r.erro) throw new Error(r.erro);
+          if (r.status === "concluido") {
+            clearInterval(intv);
             resultadoEl.classList.remove("d-none");
-            resultadoEl.innerHTML = alertHtml("danger", "Falha ao consultar status da tarefa.");
+            resultadoEl.innerHTML = alertHtml("success", "Concluído!");
+            setLoading(false);
+            setTimeout(()=>location.reload(), 1200);
+          } else {
+            statusEl.textContent = `Status: ${r.status}`;
           }
+        } catch (err) {
+          clearInterval(intv);
+          resultadoEl.classList.remove("d-none");
+          resultadoEl.innerHTML = alertHtml("danger", err.message || err);
+          setLoading(false);
         }
       }, 1000);
-    } catch {
-      if (alerta) alerta.innerHTML = alertHtml("danger", "Erro ao iniciar a duplicação.");
+    } catch (err) {
       setLoading(false);
+      alerta.innerHTML = alertHtml("danger", err.message || err);
     }
   });
 })();
 
+// ====== START / STOP POLL ======
 (() => {
   const banner = document.getElementById("startBusyBanner");
-  const getButtons = () => [
-    ...document.querySelectorAll(".btn-ligar"),
-    ...document.querySelectorAll(".btn-ligar-all"),
-  ];
 
-  function setButtonsBusy(busy) {
-    getButtons().forEach((btn) => {
-      btn.disabled = busy;
-      const sp = btn.querySelector(".spinner-border");
+  function setStartBusy(busy) {
+    banner.classList.toggle("d-none", !busy);
+    document.querySelectorAll(".btn-ligar, .btn-ligar-all").forEach(b=>{
+      b.disabled = busy;
+      const sp = b.querySelector(".spinner-border");
       if (sp) sp.classList.toggle("d-none", !busy);
     });
-    if (banner) banner.classList.toggle("d-none", !busy);
   }
 
-  let prevBusy = false;
-  async function pollBusy() {
+  let prev = false;
+  async function poll() {
     try {
-      const res = await fetch("/status/start_busy", { cache: "no-store" });
-      const { busy } = await res.json();
-      setButtonsBusy(Boolean(busy));
-      if (prevBusy && !busy) window.location.reload();
-      prevBusy = Boolean(busy);
+      const { busy } = await fetch("/status/start_busy", {cache:"no-store"}).then(r=>r.json());
+      setStartBusy(busy);
+      if (prev && !busy) location.reload();
+      prev = busy;
     } catch {}
   }
+  poll();
+  setInterval(poll, 1500);
 
-  // Desabilita imediatamente ao enviar qualquer form de ligar (individual ou todos)
-  document.querySelectorAll("form").forEach((f) => {
-    const btn = f.querySelector(".btn-ligar, .btn-ligar-all");
-    if (btn) f.addEventListener("submit", () => setButtonsBusy(true));
+  // Ligar: mostra busy imediatamente
+  document.querySelectorAll("form.form-ligar, form[action='/ligar_todos']").forEach(f=>{
+    f.addEventListener("submit", ()=> setStartBusy(true));
   });
-
-  pollBusy();
-  setInterval(pollBusy, 1500);
 })();
 
+// ====== DESLIGAR (via fetch para recarregar rápido) ======
 (() => {
-  // Recarrega a tela após concluir POST de desligar (individual e todos)
-  async function hookPostAndReload(selector) {
-    document.querySelectorAll(selector).forEach((form) => {
-      form.addEventListener("submit", async (e) => {
+  async function hook(selector){
+    document.querySelectorAll(selector).forEach(form=>{
+      form.addEventListener("submit", async e=>{
         e.preventDefault();
         const btn = form.querySelector("button");
-        if (btn) {
-          btn.disabled = true;
-          btn.dataset._oldText = btn.textContent || "";
-          btn.textContent = "Desligando...";
-        }
+        if (btn){ btn.disabled = true; btn.textContent = "Desligando..."; }
         try {
-          const res = await fetch(form.action, {
-            method: form.method || "POST",
-            body: new FormData(form),
-          });
-          // Independentemente do redirect, atualize a lista
-          if (res.ok) window.location.reload();
-          else window.location.reload();
-        } catch {
-          window.location.reload();
+          await fetch(form.action, { method: form.method || "POST" });
+        } finally {
+          location.reload();
         }
       });
     });
   }
+  hook("form.form-desligar");
+  hook("form.form-desligar-todos");
+})();
 
-  hookPostAndReload('form[action^="/parar/"]');
-  hookPostAndReload('form[action="/desligar_todos"]');
+// ====== ROBÔ DE SESSÃO ======
+(() => {
+  const form = document.getElementById("formSessionBot");
+  if (!form) return;
+  const logEl = document.getElementById("sessionBotLog");
+  const btnPause = document.getElementById("btnPause");
+  const btnStop = document.getElementById("btnStop");
+  const btnStatus = document.getElementById("btnStatus");
+  let currentPorta = null;
+  let paused = false;
+
+  const append = m => { logEl.textContent += m + "\n"; logEl.scrollTop = logEl.scrollHeight; };
+
+  async function post(url, payload){
+    const res = await fetch(url, {
+      method:"POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  form.addEventListener("submit", async e=>{
+    e.preventDefault();
+    const fd = new FormData(form);
+    const payload = Object.fromEntries(fd.entries());
+    currentPorta = payload.porta;
+    try {
+      const r = await post("/bots/start", payload);
+      paused = false;
+      append("START -> " + JSON.stringify(r));
+    } catch(err) {
+      append("ERRO START: " + err.message);
+    }
+  });
+
+  btnPause.addEventListener("click", async ()=>{
+    if (!currentPorta) return append("Defina porta primeiro.");
+    try {
+      const r = await post("/bots/pause", { porta: currentPorta, pause: !paused });
+      paused = r.paused;
+      append("PAUSE -> " + (paused? "PAUSADO":"ATIVO"));
+    } catch(err) {
+      append("ERRO PAUSE: " + err.message);
+    }
+  });
+
+  btnStop.addEventListener("click", async ()=>{
+    if (!currentPorta) return append("Defina porta primeiro.");
+    try {
+      const r = await post("/bots/stop", { porta: currentPorta });
+      append("STOP -> " + JSON.stringify(r));
+    } catch(err) {
+      append("ERRO STOP: " + err.message);
+    }
+  });
+
+  btnStatus.addEventListener("click", async ()=>{
+    try {
+      const data = await fetch("/bots/status").then(r=>r.json());
+      append("STATUS -> " + JSON.stringify(data, null, 2));
+    } catch(err) {
+      append("ERRO STATUS: " + err.message);
+    }
+  });
 })();
