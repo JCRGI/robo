@@ -11,12 +11,9 @@ from core.services.notify import NotifyService
 class BotConfig:
     serial: str
     texto_alvo: str
-    novo_texto: Optional[str] = None
     intervalo: float = 3.0
     max_ciclos: Optional[int] = None
-    usar_swipe: bool = True
-    espera_pos_swipe: float = 1.5
-    notify_whatsapp: bool = False  # NOVO
+    notify_whatsapp: bool = False
 
 @dataclass
 class BotStatus:
@@ -71,23 +68,25 @@ class SessionBot:
         try:
             # detectar tamanho de tela (uma vez) para calcular swipe
             swipe_coords = None
-            if self.cfg.usar_swipe:
-                try:
-                    out = self._adb.shell_for(self.cfg.serial, "wm size")  # ex: Physical size: 1080x1920
-                    for part in out.split():
-                        if "x" in part and part.replace("x", "").isdigit() is False:
-                            # part tipo "1080x1920"
-                            w_h = part.strip().split("x")
-                            if len(w_h) == 2 and all(p.isdigit() for p in w_h):
-                                w, h = map(int, w_h)
-                                x = w // 2
-                                y_start = int(h * 0.70)
-                                y_end = int(h * 0.30)
-                                swipe_coords = (x, y_start, x, y_end, 400)  # duração 400ms
-                                break
-                except Exception:
-                    swipe_coords = None  # fallback: ignora swipe se falhar
-            while not self._stop.is_set():
+            try:
+                out = self._adb.shell_for(self.cfg.serial, "wm size")  # ex: Physical size: 1080x1920
+                for part in out.split():
+                    if "x" in part and part.replace("x", "").isdigit() is False:
+                        # part tipo "1080x1920"
+                        w_h = part.strip().split("x")
+                        if len(w_h) == 2 and all(p.isdigit() for p in w_h):
+                            w, h = map(int, w_h)
+                            x = w // 2  # centro horizontal
+                            y_start = int(h * 0.15)  # começar bem no topo (15% da altura)
+                            y_end = int(h * 0.60)    # terminar no meio-baixo (60% da altura)
+                            swipe_coords = (x, y_start, x, y_end, 800)  # duração 800ms (mais lento = pull to refresh)
+                            break
+            except Exception:
+                swipe_coords = None  # fallback: ignora swipe se falhar
+            
+            texto_encontrado = False
+            
+            while not self._stop.is_set() and not texto_encontrado:
                 if self._pause.is_set():
                     time.sleep(0.4)
                     continue
@@ -95,16 +94,16 @@ class SessionBot:
                 self.cycles += 1
                 ciclo = self.cycles
                 try:
-                    # 1. Swipe de refresh
-                    if self.cfg.usar_swipe and swipe_coords:
+                    # 1. Pull to refresh - puxar de cima para baixo para atualizar (sempre faz)
+                    if swipe_coords:
                         x1, y1, x2, y2, dur = swipe_coords
                         self._adb.shell_for(
                             self.cfg.serial,
                             f"input swipe {x1} {y1} {x2} {y2} {dur}"
                         )
-                        time.sleep(self.cfg.espera_pos_swipe)
+                        time.sleep(2.0)  # aguarda atualização do conteúdo
 
-                    # 2. Busca do texto (UIAutomator click)
+                    # 2. Busca do texto
                     achou = self._ocr.click_text_uia(
                         self.cfg.serial,
                         self.cfg.texto_alvo,
@@ -112,27 +111,27 @@ class SessionBot:
                         delay=0.3
                     )
 
-                    if achou and not self._sent_notification and self.cfg.notify_whatsapp and self._notifier:
-                        self._notifier.notify_found(self.cfg.serial, self.cfg.texto_alvo, ciclo)
-                        self._sent_notification = True
-                    if achou and self.cfg.novo_texto:
-                        # foco dado pelo clique; limpar e digitar novo texto
-                        self._adb.shell_for(self.cfg.serial, "input keyevent 123")  # END
-                        for _ in range(40):
-                            self._adb.shell_for(self.cfg.serial, "input keyevent 67")  # DEL
-                        safe_txt = self.cfg.novo_texto.replace(" ", "%s")
-                        self._adb.shell_for(self.cfg.serial, f"input text {safe_txt}")
-                        self.last_result = f"ciclo {ciclo}: encontrado e atualizado"
-                    elif achou:
-                        self.last_result = f"ciclo {ciclo}: encontrado"
+                    if achou:
+                        texto_encontrado = True
+                        self.last_result = f"ciclo {ciclo}: ENCONTRADO '{self.cfg.texto_alvo}' - PARANDO"
+                        
+                        if not self._sent_notification and self.cfg.notify_whatsapp and self._notifier:
+                            self._notifier.notify_found(self.cfg.serial, self.cfg.texto_alvo, ciclo)
+                            self._sent_notification = True
                     else:
-                        self.last_result = f"ciclo {ciclo}: NÃO encontrado"
+                        self.last_result = f"ciclo {ciclo}: procurando '{self.cfg.texto_alvo}'..."
+                        
                 except Exception as e:
                     self.last_result = f"ciclo {ciclo}: erro {e}"
 
                 if self.cfg.max_ciclos and self.cycles >= self.cfg.max_ciclos:
                     break
-                time.sleep(max(0.2, self.cfg.intervalo))
+                    
+                # Se encontrou o texto, para imediatamente
+                if texto_encontrado:
+                    break
+                    
+                time.sleep(max(0.5, self.cfg.intervalo))
         finally:
             self._stop.set()
 
@@ -144,10 +143,14 @@ class RuntimeBotsService:
         self._bots: Dict[str, SessionBot] = {}
         self._lock = threading.Lock()
 
-    def start_bot(self, serial: str, texto_alvo: str, novo_texto: Optional[str],
-                  intervalo: float, notify_whatsapp: bool = False) -> BotStatus:
-        cfg = BotConfig(serial=serial, texto_alvo=texto_alvo, novo_texto=novo_texto,
-                        intervalo=intervalo, notify_whatsapp=notify_whatsapp)
+    def start_bot(self, serial: str, texto_alvo: str, intervalo: float = 3.0, 
+                  notify_whatsapp: bool = False) -> BotStatus:
+        cfg = BotConfig(
+            serial=serial, 
+            texto_alvo=texto_alvo, 
+            intervalo=intervalo, 
+            notify_whatsapp=notify_whatsapp
+        )
         with self._lock:
             bot = self._bots.get(serial)
             if bot and bot.status().running:

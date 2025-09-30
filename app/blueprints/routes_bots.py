@@ -25,14 +25,21 @@ def start_bot():
         porta = int(porta_raw)
     except (TypeError, ValueError):
         abort(400, description="Porta inválida.")
+    
     texto = (data.get("texto_alvo") or "").strip()
     if not texto:
         abort(400, description="texto_alvo obrigatório.")
-    novo = (data.get("novo_texto") or "").strip() or None
+    
     intervalo = float(data.get("intervalo") or 3)
     notify = bool(data.get("notify_whatsapp"))
+    
     serial = f"emulator-{normalizar_porta_console(porta)}"
-    st = core.runtime_bots.start_bot(serial, texto, novo, intervalo, notify_whatsapp=notify)
+    st = core.runtime_bots.start_bot(
+        serial=serial, 
+        texto_alvo=texto, 
+        intervalo=intervalo, 
+        notify_whatsapp=notify
+    )
     return jsonify(_status_to_dict(st))
 
 @bp_bots.route("/bots/pause", methods=["POST"])
@@ -74,6 +81,5 @@ def _status_to_dict(st):
         "last_result": st.last_result,
         "serial": st.config.serial,
         "texto_alvo": st.config.texto_alvo,
-        "novo_texto": st.config.novo_texto,
         "intervalo": st.config.intervalo,
     }

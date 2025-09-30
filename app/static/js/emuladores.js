@@ -138,43 +138,62 @@
     e.preventDefault();
     const fd = new FormData(form);
     const payload = Object.fromEntries(fd.entries());
+    
+    // Adiciona notificação WhatsApp se selecionada
+    payload.notify_whatsapp = document.getElementById("chkNotifyWpp")?.checked || false;
+    
     currentPorta = payload.porta;
     try {
       const r = await post("/bots/start", payload);
       paused = false;
-      append("START -> " + JSON.stringify(r));
+      append(`✅ ROBÔ INICIADO na porta ${payload.porta}`);
+      append(`🔍 Procurando por: "${payload.texto_alvo}"`);
+      append(`📱 WhatsApp: ${payload.notify_whatsapp ? 'ATIVO' : 'inativo'}`);
+      append(`⏱️ Intervalo: ${payload.intervalo}s`);
+      append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      append(JSON.stringify(r, null, 2));
     } catch(err) {
-      append("ERRO START: " + err.message);
+      append("❌ ERRO AO INICIAR: " + err.message);
     }
   });
 
   btnPause.addEventListener("click", async ()=>{
-    if (!currentPorta) return append("Defina porta primeiro.");
+    if (!currentPorta) return append("⚠️ Defina porta primeiro.");
     try {
       const r = await post("/bots/pause", { porta: currentPorta, pause: !paused });
       paused = r.paused;
-      append("PAUSE -> " + (paused? "PAUSADO":"ATIVO"));
+      append("⏸️ " + (paused? "PAUSADO":"RETOMADO"));
     } catch(err) {
-      append("ERRO PAUSE: " + err.message);
+      append("❌ ERRO PAUSE: " + err.message);
     }
   });
 
   btnStop.addEventListener("click", async ()=>{
-    if (!currentPorta) return append("Defina porta primeiro.");
+    if (!currentPorta) return append("⚠️ Defina porta primeiro.");
     try {
       const r = await post("/bots/stop", { porta: currentPorta });
-      append("STOP -> " + JSON.stringify(r));
+      append("⏹️ ROBÔ PARADO");
+      append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     } catch(err) {
-      append("ERRO STOP: " + err.message);
+      append("❌ ERRO STOP: " + err.message);
     }
   });
 
   btnStatus.addEventListener("click", async ()=>{
     try {
       const data = await fetch("/bots/status").then(r=>r.json());
-      append("STATUS -> " + JSON.stringify(data, null, 2));
+      append("📊 STATUS:");
+      for (const [serial, status] of Object.entries(data)) {
+        append(`📱 ${serial}:`);
+        append(`  🔄 Rodando: ${status.running ? '✅' : '❌'}`);
+        append(`  ⏸️ Pausado: ${status.paused ? '✅' : '❌'}`);
+        append(`  🔢 Ciclos: ${status.cycles}`);
+        append(`  📄 Resultado: ${status.last_result || 'nenhum'}`);
+        append(`  🔍 Procurando: "${status.texto_alvo}"`);
+        append("  ────────────────────────");
+      }
     } catch(err) {
-      append("ERRO STATUS: " + err.message);
+      append("❌ ERRO STATUS: " + err.message);
     }
   });
 })();
