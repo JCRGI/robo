@@ -1,8 +1,14 @@
 import os
 
-from flask import render_template
+from flask import Flask, render_template
 
 from app import create_app
+from app.routes.ocr_routes import ocr_bp
+
+app = Flask(__name__)
+
+# Registrar blueprint
+app.register_blueprint(ocr_bp)
 
 app = create_app(os.getenv("FLASK_CONFIG", "configs.config.DevConfig"))
 

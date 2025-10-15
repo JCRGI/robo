@@ -1,7 +1,9 @@
-from __future__ import annotations
+"""Controlador de emuladores Android via ADB"""
 
 import subprocess
 import time
+import os
+from typing import List, Tuple, Optional
 
 from core.utils import normalizar_porta_console
 
@@ -113,3 +115,221 @@ def stop_emulator(serial: str) -> None:
         time.sleep(0.5)
         if serial not in listar_emuladores_ativos():
             break
+
+
+# ============================================================================
+# 🆕 NOVAS FUNÇÕES ADICIONADAS
+# ============================================================================
+
+def executar_comando_adb(serial: str, comando: str, timeout: int = 30) -> Tuple[bool, str]:
+    """
+    Executa comando ADB em um emulador específico.
+    
+    Args:
+        serial: Serial do emulador (ex: emulator-5560)
+        comando: Comando ADB a executar
+        timeout: Timeout em segundos
+        
+    Returns:
+        Tuple (sucesso, output)
+    """
+    try:
+        cmd_completo = f'adb -s {serial} {comando}'
+        print(f"[ADB] Executando: {cmd_completo}")
+        
+        resultado = subprocess.run(
+            cmd_completo,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+        
+        sucesso = resultado.returncode == 0
+        output = resultado.stdout.strip() if sucesso else resultado.stderr.strip()
+        
+        if not sucesso:
+            print(f"[ADB] Erro: {output}")
+        
+        return sucesso, output
+        
+    except subprocess.TimeoutExpired:
+        print(f"[ADB] Timeout após {timeout}s")
+        return False, f"Timeout após {timeout}s"
+    except Exception as e:
+        print(f"[ADB] Exceção: {e}")
+        return False, str(e)
+
+
+def swipe(serial: str, x1: int, y1: int, x2: int, y2: int, duration: int = 300) -> bool:
+    """
+    Realiza um swipe na tela do emulador.
+    
+    Args:
+        serial: Serial do emulador
+        x1, y1: Coordenadas iniciais
+        x2, y2: Coordenadas finais
+        duration: Duração do swipe em milissegundos
+        
+    Returns:
+        True se sucesso
+    """
+    try:
+        print(f"[SWIPE] {serial}: ({x1},{y1}) -> ({x2},{y2}) em {duration}ms")
+        
+        # Comando ADB para swipe
+        comando = f"shell input swipe {x1} {y1} {x2} {y2} {duration}"
+        sucesso, output = executar_comando_adb(serial, comando, timeout=10)
+        
+        if sucesso:
+            print(f"[SWIPE] ✅ Swipe executado com sucesso")
+            time.sleep(0.5)  # Aguardar animação
+        else:
+            print(f"[SWIPE] ❌ Falha: {output}")
+        
+        return sucesso
+        
+    except Exception as e:
+        print(f"[SWIPE] ❌ Exceção: {e}")
+        return False
+
+
+def tap(serial: str, x: int, y: int) -> bool:
+    """
+    Toca em uma coordenada específica na tela.
+    
+    Args:
+        serial: Serial do emulador
+        x, y: Coordenadas do toque
+        
+    Returns:
+        True se sucesso
+    """
+    try:
+        print(f"[TAP] {serial}: ({x},{y})")
+        
+        comando = f"shell input tap {x} {y}"
+        sucesso, output = executar_comando_adb(serial, comando, timeout=10)
+        
+        if sucesso:
+            print(f"[TAP] ✅ Tap executado")
+        else:
+            print(f"[TAP] ❌ Falha: {output}")
+        
+        return sucesso
+        
+    except Exception as e:
+        print(f"[TAP] ❌ Exceção: {e}")
+        return False
+
+
+def get_screen_size(serial: str) -> Optional[Tuple[int, int]]:
+    """
+    Obtém o tamanho da tela do emulador.
+    
+    Returns:
+        Tuple (width, height) ou None se falhar
+    """
+    try:
+        comando = "shell wm size"
+        sucesso, output = executar_comando_adb(serial, comando, timeout=10)
+        
+        if sucesso and output:
+            # Output: "Physical size: 1080x1920"
+            if ":" in output:
+                size_str = output.split(":")[-1].strip()
+                if "x" in size_str:
+                    width, height = map(int, size_str.split("x"))
+                    print(f"[SCREEN] {serial}: {width}x{height}")
+                    return (width, height)
+        
+        print(f"[SCREEN] ⚠️ Não foi possível obter tamanho da tela")
+        return None
+        
+    except Exception as e:
+        print(f"[SCREEN] ❌ Exceção: {e}")
+        return None
+
+
+def press_key(serial: str, keycode: int) -> bool:
+    """
+    Pressiona uma tecla no emulador.
+    
+    Args:
+        serial: Serial do emulador
+        keycode: Código da tecla (KEYCODE_BACK = 4, KEYCODE_HOME = 3, etc)
+        
+    Returns:
+        True se sucesso
+    """
+    try:
+        print(f"[KEY] {serial}: keycode {keycode}")
+        
+        comando = f"shell input keyevent {keycode}"
+        sucesso, output = executar_comando_adb(serial, comando, timeout=10)
+        
+        if sucesso:
+            print(f"[KEY] ✅ Tecla pressionada")
+        else:
+            print(f"[KEY] ❌ Falha: {output}")
+        
+        return sucesso
+        
+    except Exception as e:
+        print(f"[KEY] ❌ Exceção: {e}")
+        return False
+
+
+def capture_screen(serial: str, output_path: str) -> bool:
+    """
+    Captura screenshot do emulador.
+    
+    Args:
+        serial: Serial do emulador
+        output_path: Caminho onde salvar a imagem
+        
+    Returns:
+        True se sucesso
+    """
+    try:
+        import os
+        
+        print(f"[SCREEN] Capturando {serial} -> {output_path}")
+        
+        # Garantir que diretório existe
+        os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
+        
+        # Caminho temporário no dispositivo
+        temp_path = "/sdcard/screenshot_temp.png"
+        
+        # 1. Capturar no dispositivo
+        comando_capture = f"shell screencap -p {temp_path}"
+        sucesso, output = executar_comando_adb(serial, comando_capture, timeout=15)
+        
+        if not sucesso:
+            print(f"[SCREEN] ❌ Falha ao capturar: {output}")
+            return False
+        
+        # 2. Puxar para o computador
+        comando_pull = f"pull {temp_path} {output_path}"
+        sucesso, output = executar_comando_adb(serial, comando_pull, timeout=30)
+        
+        if not sucesso:
+            print(f"[SCREEN] ❌ Falha ao puxar: {output}")
+            return False
+        
+        # 3. Limpar arquivo temporário
+        comando_rm = f"shell rm {temp_path}"
+        executar_comando_adb(serial, comando_rm, timeout=5)
+        
+        # Verificar se arquivo foi criado
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            print(f"[SCREEN] ✅ Screenshot salvo: {os.path.getsize(output_path)} bytes")
+            return True
+        else:
+            print(f"[SCREEN] ❌ Arquivo não foi criado ou está vazio")
+            return False
+        
+    except Exception as e:
+        print(f"[SCREEN] ❌ Exceção: {e}")
+        return False
